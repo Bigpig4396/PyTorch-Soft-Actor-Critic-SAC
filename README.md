@@ -1,7 +1,7 @@
 # PyTorch-Soft-Actor-Critic-SAC
 
 
-https://arxiv.org/abs/1801.01290
+https://arxiv.org/abs/1910.07207v1
 
 
 Soft actor critic algorithm for discrete action.
