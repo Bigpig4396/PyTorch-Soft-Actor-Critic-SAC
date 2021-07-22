@@ -61,10 +61,12 @@ class SAC():
         self.p_net = P_net(state_dim, action_dim)
         self.q_net = Q_net(state_dim, action_dim)
         self.gamma = 0.99
-        self.alpha = 1
+        self.log_alpha = torch.zeros(1, dtype=torch.float32, requires_grad=True)
+        self.alpha = self.log_alpha.exp()
         self.loss_fn = torch.nn.MSELoss()
         self.q_optimizer = torch.optim.Adam(self.q_net.parameters(), lr=1e-3)
         self.p_optimizer = torch.optim.Adam(self.p_net.parameters(), lr=1e-4)
+        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=3e-4)
 
     def get_action(self, state):
         state = torch.from_numpy(state).float()
@@ -74,22 +76,18 @@ class SAC():
         return action.item()
 
     def train(self, batch):
-        state = batch[0]  # array [64 1 3]
-        action = batch[1]  # array [64, ]
-        reward = batch[2]  # array [64, ]
+        state = batch[0]
+        action = batch[1]
+        reward = batch[2]
         next_state = batch[3]
         state = torch.from_numpy(state).float().squeeze(1)
         next_state = torch.from_numpy(next_state).float().squeeze(1)
         T = state.size()[0]
 
         # calculate V
+        self.alpha = self.log_alpha.exp()
         next_q = self.q_net.forward(next_state)
         next_a_prob = self.p_net.forward(next_state)
-        '''c = Categorical(next_a_prob)
-        next_new_a = c.sample()
-        next_v = torch.zeros(T, )
-        for i in range(T):
-            next_v[i] = next_q[i, next_new_a[i]] - self.alpha*torch.log(next_a_prob[i, next_new_a[i]])'''
         next_v = next_a_prob*(next_q-self.alpha*torch.log(next_a_prob))
         next_v = torch.sum(next_v, 1)
 
@@ -106,18 +104,23 @@ class SAC():
         # train Actor
         q = self.q_net.forward(state)
         a_prob = self.p_net.forward(state)
-        '''c = Categorical(a_prob)
-        new_a = c.sample()
-        loss = torch.FloatTensor([0.0])
-        for i in range(T):
-            loss += self.alpha*torch.log(a_prob[i, new_a[i]]) - q[i, new_a[i]]'''
         loss = a_prob*(self.alpha*torch.log(a_prob)-q)
-        # print('loss', loss.size())
         loss = torch.sum(loss)
         loss = loss / T
         self.p_optimizer.zero_grad()
         loss.backward()
         self.p_optimizer.step()
+
+        # Updating alpha wrt entropy
+        self.alpha = self.log_alpha.exp()
+        a_prob = self.p_net.forward(state)
+        H = - a_prob*torch.log(a_prob)
+        alpha_loss = -a_prob*(self.alpha*torch.log(a_prob) + self.alpha * H)
+        alpha_loss = torch.sum(alpha_loss)
+        alpha_loss = alpha_loss / T
+        self.alpha_optimizer.zero_grad()
+        alpha_loss.backward()
+        self.alpha_optimizer.step()
 
     def load_model(self):
         self.q_net = torch.load('SAC_q_net.pkl')
@@ -154,6 +157,6 @@ if __name__ == '__main__':
                 agent.train(replay_buffer.sample(batch_size))
             if done:
                 break
-        print('epi', epi_iter, 'reward', acc_reward / mc_iter, 'MC', mc_iter)
+        print('epi', epi_iter, 'reward', acc_reward / mc_iter, 'MC', mc_iter, 'alpha', agent.alpha)
         env.reset()
         acc_reward = 0
