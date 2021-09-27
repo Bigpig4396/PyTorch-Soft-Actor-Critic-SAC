@@ -5,3 +5,6 @@ https://arxiv.org/abs/1910.07207v1
 
 
 Soft actor critic algorithm for discrete action.
+
+
+Use Sigmoid, never ReLU!!!!!!!!
