@@ -4,7 +4,9 @@
 https://arxiv.org/abs/1910.07207v1
 
 
-Soft actor critic algorithm for discrete action.
+Soft actor critic algorithm.
 
 
-Use Sigmoid, never ReLU!!!!!!!!
+SAC.py for discrete action space.
+
+SAC_pendulum.py for continuous action space.
